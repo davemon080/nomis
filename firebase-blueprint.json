@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "App user profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "avatar": { "type": "string" },
+        "coverPhoto": { "type": "string" },
+        "bio": { "type": "string" },
+        "followersCount": { "type": "string" },
+        "followingCount": { "type": "string" },
+        "totalLikes": { "type": "string" },
+        "isFollowing": { "type": "boolean" },
+        "isVerified": { "type": "boolean" }
+      },
+      "required": ["uid", "name", "username"]
+    },
+    "Video": {
+      "title": "Video",
+      "description": "Short form video document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "tags": { "type": "array" },
+        "creator": { "type": "object" },
+        "music": { "type": "string" },
+        "likes": { "type": "number" },
+        "commentsCount": { "type": "number" },
+        "sharesCount": { "type": "number" },
+        "savesCount": { "type": "number" },
+        "isLiked": { "type": "boolean" },
+        "isSaved": { "type": "boolean" }
+      },
+      "required": ["id", "url", "title", "creator"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles"
+    },
+    "/videos/{videoId}": {
+      "schema": "Video",
+      "description": "Collection of videos"
+    }
+  }
+}

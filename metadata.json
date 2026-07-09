@@ -1,0 +1,6 @@
+{
+  "name": "Nomis",
+  "description": "A premium glassmorphic short-form video platform featuring high-fidelity UI, fluid motion design, and responsive layouts.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

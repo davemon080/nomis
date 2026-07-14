@@ -9,6 +9,7 @@ import { ShieldCheck, Compass, Sparkles, LogIn, UserPlus, ArrowRight, ArrowLeft,
 import { ScreenId } from '../types';
 import { GlassButton, GlassCard, GlassInput } from '../components/GlassDesignSystem';
 import { loginWithEmail, registerWithEmail, resetPassword, signInWithGoogle } from '../lib/firebase';
+import appLogo from '../assets/images/app_logo_1784015855312.jpg';
 
 // ==========================================
 // SPLASH VIEW
@@ -43,7 +44,7 @@ export const SplashView: React.FC<{
           className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-[#FF3B30] to-[#FF9F0A] border border-white/25 overflow-hidden flex items-center justify-center backdrop-blur-xl shadow-[0_10px_30px_rgba(255,59,48,0.4)] relative"
         >
           <img 
-            src="/src/assets/images/app_logo_1784015855312.jpg" 
+            src={appLogo} 
             alt="Nomis Logo" 
             className="w-full h-full object-cover select-none" 
             referrerPolicy="no-referrer"

@@ -47,6 +47,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Shield, Chrome, Award } from 'lucide-react';
 import { generateVideoThumbnail, setCachedThumbnail } from './lib/thumbnailCache';
+import appLogo from './assets/images/app_logo_1784015855312.jpg';
 
 // Helper to preload profile images, actual video source buffers, and pre-cache high-fidelity thumbnails
 const preloadAppAssets = (videoList: Video[]) => {
@@ -877,7 +878,7 @@ export default function App() {
             className="w-24 h-24 rounded-[2rem] bg-gradient-to-tr from-[#FF3B30] to-[#FF9F0A] overflow-hidden flex items-center justify-center border border-white/20"
           >
             <img 
-              src="/src/assets/images/app_logo_1784015855312.jpg" 
+              src={appLogo} 
               alt="Nomis Logo" 
               className="w-full h-full object-cover select-none animate-pulse" 
               referrerPolicy="no-referrer"

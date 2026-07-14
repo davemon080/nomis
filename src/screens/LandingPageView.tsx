@@ -14,6 +14,8 @@ import {
   ArrowDown
 } from 'lucide-react';
 import { GlassButton, GlassCard } from '../components/GlassDesignSystem';
+import appLogo from '../assets/images/app_logo_1784015855312.jpg';
+import appScreenshotBg from '../assets/images/app_screenshot_background_1784017962238.jpg';
 
 interface LandingPageViewProps {
   onEnterApp: () => void;
@@ -68,11 +70,24 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({ onEnterApp }) 
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#050505] text-white flex flex-col relative overflow-x-hidden select-none font-sans">
+    <div className="min-h-screen w-full bg-[#050505] text-white flex flex-col relative overflow-x-hidden overflow-y-auto select-none font-sans scroll-smooth">
       {/* Visual background atmospheric orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-25%] w-[80%] h-[80%] bg-[#FF3B30] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.12] animate-pulse" style={{ animationDuration: '8s' }} />
         <div className="absolute bottom-[-15%] right-[-25%] w-[80%] h-[80%] bg-[#5856D6] rounded-full mix-blend-screen filter blur-[150px] opacity-[0.12] animate-pulse" style={{ animationDuration: '10s' }} />
+      </div>
+
+      {/* Dark themed app screenshot/mockup background */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none opacity-[0.15]">
+        <img 
+          src={appScreenshotBg} 
+          alt="App Screenshot" 
+          className="w-full h-full object-cover object-center filter blur-[1px] scale-105"
+          referrerPolicy="no-referrer"
+        />
+        {/* Dark gradient mask to blend with deep black canvas */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#050505] via-transparent to-[#050505]" />
+        <div className="absolute inset-0 bg-radial-[circle_at_center,rgba(5,5,5,0)_10%,rgba(5,5,5,1)_95%]" />
       </div>
 
       {/* Main Content Scroll Container */}
@@ -83,7 +98,7 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({ onEnterApp }) 
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#FF3B30] to-[#FF9F0A] overflow-hidden flex items-center justify-center shadow-[0_4px_15px_rgba(255,59,48,0.4)] border border-white/20">
               <img 
-                src="/src/assets/images/app_logo_1784015855312.jpg" 
+                src={appLogo} 
                 alt="Nomis Logo" 
                 className="w-full h-full object-cover select-none" 
                 referrerPolicy="no-referrer"
@@ -109,9 +124,9 @@ export const LandingPageView: React.FC<LandingPageViewProps> = ({ onEnterApp }) 
             </div>
             
             <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-[1.1] uppercase">
-              The Motion <br />
+              Next Gen <br />
               <span className="bg-gradient-to-r from-[#FF3B30] via-[#FF9F0A] to-[#FF3B30] bg-clip-text text-transparent bg-size-200 animate-gradient">
-                Video Platform
+                Video Experience
               </span>
             </h1>
             

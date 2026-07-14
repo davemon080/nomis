@@ -248,6 +248,13 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
     }
   }, [isActive]);
 
+  // Synchronize muted property directly with the native video element to ensure reliable sound toggles
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
+
   // Play/Pause effect based on active state
   useEffect(() => {
     if (videoRef.current) {

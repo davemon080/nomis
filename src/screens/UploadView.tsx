@@ -171,8 +171,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
     y: number;
     scale: number;
   }>>([]);
-  const [musicVolume, setMusicVolume] = useState(80);
-  const [videoVolume, setVideoVolume] = useState(50);
+  const [musicVolume, setMusicVolume] = useState(100);
+  const [videoVolume, setVideoVolume] = useState(100);
   const [currentText, setCurrentText] = useState('');
   const [currentTextColor, setCurrentTextColor] = useState('#ffffff');
   const [currentTextBgStyle, setCurrentTextBgStyle] = useState<'none' | 'solid' | 'frosted'>('none');
@@ -313,10 +313,31 @@ export const UploadView: React.FC<UploadViewProps> = ({
     }
     recordedChunksRef.current = [];
     try {
-      const options = { mimeType: 'video/webm;codecs=vp9' };
       let recorder: MediaRecorder;
+      let options: any = null;
+      
+      const candidateTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=h264,opus',
+        'video/mp4;codecs=avc1,mp4a',
+        'video/webm',
+        'video/mp4'
+      ];
+      
+      for (const type of candidateTypes) {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
+          options = { mimeType: type };
+          break;
+        }
+      }
+
       try {
-        recorder = new MediaRecorder(cameraStream!, options);
+        if (options) {
+          recorder = new MediaRecorder(cameraStream!, options);
+        } else {
+          recorder = new MediaRecorder(cameraStream!);
+        }
       } catch (e) {
         recorder = new MediaRecorder(cameraStream!);
       }
@@ -430,6 +451,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
   // Sync video and audio elements when playing/muted states change
   useEffect(() => {
     if (previewVideoRef.current && selectedVideoUrl && mediaType === 'video' && currentStage === 'preview') {
+      previewVideoRef.current.muted = previewMuted;
       if (previewPlaying) {
         previewVideoRef.current.play().catch(() => {});
       } else {
@@ -604,6 +626,10 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
   const handlePublish = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth.currentUser) {
+      onShowToast('Guests and unauthenticated users cannot post. Please sign in first!');
+      return;
+    }
     if (!selectedVideoUrl) {
       onShowToast('Please provide media content first.');
       return;
@@ -1453,6 +1479,10 @@ export const UploadView: React.FC<UploadViewProps> = ({
           <form 
             onSubmit={(e) => {
               e.preventDefault();
+              if (!auth.currentUser) {
+                onShowToast('Guests and unauthenticated users cannot post. Please sign in first!');
+                return;
+              }
               if (!selectedVideoUrl) return;
               const finalCaption = caption.trim() || 'Visual Inspiration';
               const extractedTags = finalCaption

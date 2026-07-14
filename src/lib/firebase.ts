@@ -88,28 +88,34 @@ export const logOut = async () => {
 // Database helper functions for video and creator interactions
 // 1. Like / Unlike a video
 export const toggleLikeVideoInDb = async (videoId: string, userId: string, currentlyLiked: boolean) => {
-  const videoRef = doc(db, 'videos', videoId);
-  const userLikesRef = doc(db, 'users', userId, 'likes', videoId);
-  
-  if (currentlyLiked) {
-    // Unlike
-    await updateDoc(videoRef, {
-      likes: increment(-1)
-    });
-    await setDoc(userLikesRef, { liked: false });
-  } else {
-    // Like
-    await updateDoc(videoRef, {
-      likes: increment(1)
-    });
-    await setDoc(userLikesRef, { liked: true, timestamp: new Date().toISOString() });
+  try {
+    const videoRef = doc(db, 'videos', videoId);
+    const userLikesRef = doc(db, 'users', userId, 'likes', videoId);
+    
+    // Check if the video document actually exists in the database
+    const videoSnap = await getDoc(videoRef);
+    if (!videoSnap.exists()) {
+      console.warn(`Video ${videoId} does not exist in Firestore. Skipping database sync.`);
+      return;
+    }
 
-    try {
-      // Create notification
-      const videoSnap = await getDoc(videoRef);
-      if (videoSnap.exists()) {
+    if (currentlyLiked) {
+      // Unlike
+      await updateDoc(videoRef, {
+        likes: increment(-1)
+      });
+      await setDoc(userLikesRef, { liked: false });
+    } else {
+      // Like
+      await updateDoc(videoRef, {
+        likes: increment(1)
+      });
+      await setDoc(userLikesRef, { liked: true, timestamp: new Date().toISOString() });
+
+      try {
+        // Create notification
         const videoData = videoSnap.data();
-        const creatorId = videoData.creator?.id;
+        const creatorId = videoData?.creator?.id;
         if (creatorId && creatorId !== userId) {
           const userSnap = await getDoc(doc(db, 'users', userId));
           const userData = userSnap.exists() ? userSnap.data() : null;
@@ -130,71 +136,88 @@ export const toggleLikeVideoInDb = async (videoId: string, userId: string, curre
             createdAt: new Date().toISOString()
           });
         }
+      } catch (err) {
+        console.warn("Could not create like notification:", err);
       }
-    } catch (err) {
-      console.warn("Could not create like notification:", err);
     }
+  } catch (err) {
+    console.error("Error toggling video like in DB:", err);
   }
 };
 
 // 1.5 Save / Unsave a video (Bookmark)
 export const toggleSaveVideoInDb = async (videoId: string, userId: string, currentlySaved: boolean) => {
-  const videoRef = doc(db, 'videos', videoId);
-  const userSavesRef = doc(db, 'users', userId, 'saves', videoId);
-  
-  if (currentlySaved) {
-    // Unsave
-    await updateDoc(videoRef, {
-      savesCount: increment(-1)
-    });
-    await setDoc(userSavesRef, { saved: false });
-  } else {
-    // Save
-    await updateDoc(videoRef, {
-      savesCount: increment(1)
-    });
-    await setDoc(userSavesRef, { saved: true, timestamp: new Date().toISOString() });
+  try {
+    const videoRef = doc(db, 'videos', videoId);
+    const userSavesRef = doc(db, 'users', userId, 'saves', videoId);
+    
+    // Check if the video document exists
+    const videoSnap = await getDoc(videoRef);
+    if (!videoSnap.exists()) {
+      console.warn(`Video ${videoId} does not exist in Firestore. Skipping save toggle.`);
+      return;
+    }
+
+    if (currentlySaved) {
+      // Unsave
+      await updateDoc(videoRef, {
+        savesCount: increment(-1)
+      });
+      await setDoc(userSavesRef, { saved: false });
+    } else {
+      // Save
+      await updateDoc(videoRef, {
+        savesCount: increment(1)
+      });
+      await setDoc(userSavesRef, { saved: true, timestamp: new Date().toISOString() });
+    }
+  } catch (err) {
+    console.error("Error toggling video save in DB:", err);
   }
 };
 
 // 2. Follow / Unfollow a creator
 export const toggleFollowCreatorInDb = async (currentUserId: string, targetCreatorId: string, currentlyFollowing: boolean) => {
-  const currentUserRef = doc(db, 'users', currentUserId);
-  const targetUserRef = doc(db, 'users', targetCreatorId);
-  
-  // Also track inside subcollections
-  const followingRef = doc(db, 'users', currentUserId, 'following', targetCreatorId);
-  const followersRef = doc(db, 'users', targetCreatorId, 'followers', currentUserId);
+  try {
+    const currentUserRef = doc(db, 'users', currentUserId);
+    const targetUserRef = doc(db, 'users', targetCreatorId);
+    
+    // Also track inside subcollections
+    const followingRef = doc(db, 'users', currentUserId, 'following', targetCreatorId);
+    const followersRef = doc(db, 'users', targetCreatorId, 'followers', currentUserId);
 
-  if (currentlyFollowing) {
-    await setDoc(followingRef, { active: false });
-    await setDoc(followersRef, { active: false });
-  } else {
-    await setDoc(followingRef, { active: true, timestamp: new Date().toISOString() });
-    await setDoc(followersRef, { active: true, timestamp: new Date().toISOString() });
+    if (currentlyFollowing) {
+      await setDoc(followingRef, { active: false });
+      await setDoc(followersRef, { active: false });
+    } else {
+      await setDoc(followingRef, { active: true, timestamp: new Date().toISOString() });
+      await setDoc(followersRef, { active: true, timestamp: new Date().toISOString() });
 
-    try {
-      // Create notification
-      const userSnap = await getDoc(doc(db, 'users', currentUserId));
-      const userData = userSnap.exists() ? userSnap.data() : null;
-      
-      await addDoc(collection(db, 'notifications'), {
-        type: 'follow',
-        recipientId: targetCreatorId,
-        sender: {
-          id: currentUserId,
-          name: userData?.name || 'Nomis Creator',
-          username: userData?.username || 'user',
-          avatar: userData?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&q=80'
-        },
-        message: 'started following you',
-        isRead: false,
-        actionText: 'Follow Back',
-        createdAt: new Date().toISOString()
-      });
-    } catch (err) {
-      console.warn("Could not create follow notification:", err);
+      try {
+        // Create notification
+        const userSnap = await getDoc(currentUserRef);
+        const userData = userSnap.exists() ? userSnap.data() : null;
+        
+        await addDoc(collection(db, 'notifications'), {
+          type: 'follow',
+          recipientId: targetCreatorId,
+          sender: {
+            id: currentUserId,
+            name: userData?.name || 'Nomis Creator',
+            username: userData?.username || 'user',
+            avatar: userData?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&q=80'
+          },
+          message: 'started following you',
+          isRead: false,
+          actionText: 'Follow Back',
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn("Could not create follow notification:", err);
+      }
     }
+  } catch (err) {
+    console.error("Error toggling follow creator in DB:", err);
   }
 };
 
@@ -475,8 +498,16 @@ export const deleteVideoFromDb = async (videoId: string) => {
       }
     }
     await deleteDoc(videoRef);
+    // Dispatch custom event to notify React components to update immediately
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('videoDeleted', { detail: { videoId } }));
+    }
   } catch (err) {
     console.error("Error deleting video from DB:", err);
+    // Even if it fails on Firestore (e.g., if deleting a mock video), dispatch event to remove from UI immediately
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('videoDeleted', { detail: { videoId } }));
+    }
     throw err;
   }
 };

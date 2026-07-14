@@ -37,6 +37,8 @@ import { SettingsView } from './screens/SettingsView';
 import { NotFoundView, MaintenanceView, OfflineView } from './screens/SystemViews';
 import { GlassSnackbar, GlassButton } from './components/GlassDesignSystem';
 import { UserOnboardingView } from './screens/UserOnboardingView';
+import { LandingPageView } from './screens/LandingPageView';
+import { PermissionsView } from './screens/PermissionsView';
 
 import { AdminDashboardView } from './screens/AdminDashboardView';
 import { auth, db, signInWithGoogle, purgeAllDummyAndSeededData, handleMentionsInPost } from './lib/firebase';
@@ -87,6 +89,34 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('home');
   const [navigationHistory, setNavigationHistory] = useState<ScreenId[]>(['home']);
   const [screenParams, setScreenParams] = useState<any>({});
+
+  // Premium App Load Up & Splash blinking state
+  const [isAppLoading, setIsAppLoading] = useState(true);
+
+  // Landing promotion page state
+  const [showLanding, setShowLanding] = useState(() => {
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    if (isPWA) return false;
+    return localStorage.getItem('nomis_dismissed_landing') !== 'true';
+  });
+
+  // App Permissions Overlay state
+  const [showPermissionsReq, setShowPermissionsReq] = useState(false);
+
+  // Handle dynamic load up completion
+  useEffect(() => {
+    const loadTimer = setTimeout(() => {
+      setIsAppLoading(false);
+      // Once app has completed loading up, check if permissions need requesting
+      const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      const dismissedLanding = localStorage.getItem('nomis_dismissed_landing') === 'true';
+      if ((isPWA || dismissedLanding) && localStorage.getItem('nomis_permissions_granted') !== 'true') {
+        setShowPermissionsReq(true);
+      }
+    }, 2200); // 2.2 seconds premium breathing/blinking logo animation
+
+    return () => clearTimeout(loadTimer);
+  }, []);
 
   // Theme states
   const [theme, setTheme] = useState<'light' | 'dark' | 'high-contrast'>('dark');
@@ -286,9 +316,28 @@ export default function App() {
       setVideos([]);
     });
 
+    const handleVideoDeleted = (e: Event) => {
+      const { videoId } = (e as CustomEvent).detail;
+      setVideos((prev) => prev.filter((v) => v.id !== videoId));
+      
+      try {
+        const cached = localStorage.getItem('nomis_videos_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached) as any[];
+          const updated = parsed.filter((v) => v.id !== videoId);
+          localStorage.setItem('nomis_videos_cache', JSON.stringify(updated));
+        }
+      } catch (err) {
+        console.error("Failed to update cache on delete:", err);
+      }
+    };
+
+    window.addEventListener('videoDeleted', handleVideoDeleted as EventListener);
+
     return () => {
       unsubscribeAuth();
       unsubscribeVideos();
+      window.removeEventListener('videoDeleted', handleVideoDeleted as EventListener);
     };
   }, []);
 
@@ -351,7 +400,7 @@ export default function App() {
           return;
         } else {
           localStorage.setItem(`onboarded_${user.uid}`, 'true');
-          navigateTo('creator-dashboard'); // Every user lands on dashboard after signin!
+          navigateTo('profile'); // Land on profile after Google signin!
           return;
         }
       }
@@ -578,7 +627,14 @@ export default function App() {
       case 'onboarding':
         return <OnboardingView onNavigate={navigateTo} />;
       case 'login':
-        return <LoginView onNavigate={navigateTo} onLoginSuccess={() => navigateTo('creator-dashboard')} onShowToast={triggerToast} />;
+        return (
+          <LoginView 
+            onNavigate={navigateTo} 
+            onLoginSuccess={() => navigateTo('creator-dashboard')} 
+            onGoogleLoginSuccess={() => navigateTo('profile')}
+            onShowToast={triggerToast} 
+          />
+        );
       case 'register':
         return <RegisterView onNavigate={navigateTo} onShowToast={triggerToast} />;
       case 'forgot-password':
@@ -601,6 +657,14 @@ export default function App() {
       case 'discover':
         return <DiscoverView onNavigate={navigateTo} onShowToast={triggerToast} initialSearchQuery={screenParams?.search || ''} videosList={personalizedVideos} />;
       case 'upload':
+        if (!currentUser) {
+          setTimeout(() => {
+            navigateTo('home');
+            setShowAuthOverlay(true);
+            triggerToast('Please sign in to upload or post content', 'error');
+          }, 0);
+          return null;
+        }
         return <UploadView onNavigate={navigateTo} onShowToast={triggerToast} onAddMockVideo={handleAddNewVideo} />;
       case 'notifications':
         return <NotificationsView onNavigate={navigateTo} onShowToast={triggerToast} />;
@@ -789,6 +853,76 @@ export default function App() {
     return 'bg-[#050505] text-white';
   };
 
+  // 1. Premium App Load Up Blinking Screen
+  if (isAppLoading) {
+    return (
+      <div className="fixed inset-0 w-full h-full bg-[#050505] flex flex-col items-center justify-center z-50">
+        <div className="flex flex-col items-center justify-center space-y-5">
+          <motion.div
+            initial={{ scale: 0.75, opacity: 0 }}
+            animate={{ 
+              scale: [1, 1.15, 1], 
+              opacity: [0.75, 1, 0.75],
+              boxShadow: [
+                "0 0 30px rgba(255, 59, 48, 0.4)",
+                "0 0 60px rgba(255, 59, 48, 0.8)",
+                "0 0 30px rgba(255, 59, 48, 0.4)"
+              ]
+            }}
+            transition={{ 
+              duration: 1.5, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
+            className="w-24 h-24 rounded-[2rem] bg-gradient-to-tr from-[#FF3B30] to-[#FF9F0A] overflow-hidden flex items-center justify-center border border-white/20"
+          >
+            <img 
+              src="/src/assets/images/app_logo_1784015855312.jpg" 
+              alt="Nomis Logo" 
+              className="w-full h-full object-cover select-none animate-pulse" 
+              referrerPolicy="no-referrer"
+            />
+          </motion.div>
+          <motion.h1
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="text-2xl font-black uppercase tracking-[0.25em] text-white mt-4 select-none"
+          >
+            NOMIS
+          </motion.h1>
+          <p className="text-[9px] uppercase tracking-[0.3em] text-neutral-500 font-sans font-bold select-none">The Motion Video Platform</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. High Fidelity Landing Page
+  if (showLanding) {
+    return (
+      <LandingPageView 
+        onEnterApp={() => {
+          localStorage.setItem('nomis_dismissed_landing', 'true');
+          setShowLanding(false);
+          if (localStorage.getItem('nomis_permissions_granted') !== 'true') {
+            setShowPermissionsReq(true);
+          }
+        }} 
+      />
+    );
+  }
+
+  // 3. Immersive Permissions Request Screen
+  if (showPermissionsReq) {
+    return (
+      <div className="w-full min-h-[100dvh] flex items-center justify-center p-0 md:p-6 transition-colors duration-500 overflow-hidden relative bg-[#050505]">
+        <div className="w-full max-w-md h-[100dvh] md:h-[840px] rounded-none md:rounded-[2.75rem] border border-neutral-800/10 dark:border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.8)] overflow-hidden relative flex flex-col bg-black">
+          <PermissionsView onPermissionsGranted={() => setShowPermissionsReq(false)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`w-full min-h-[100dvh] flex items-center justify-center p-0 md:p-6 transition-colors duration-500 overflow-hidden relative ${getThemeWrapperClass()}`}>
       
@@ -880,7 +1014,9 @@ export default function App() {
                   <button
                     key={tab.id}
                     onClick={() => {
-                      navigateTo(tab.id as ScreenId);
+                      handleRequireAuth(() => {
+                        navigateTo(tab.id as ScreenId);
+                      });
                     }}
                     className="relative flex flex-col items-center justify-center py-1 px-4 cursor-pointer transition-transform duration-300 hover:scale-105 active:scale-95"
                   >

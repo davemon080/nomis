@@ -40,11 +40,14 @@ export const SplashView: React.FC<{
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: [1, 1.05, 1], opacity: 1 }}
           transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-          className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-[#FF3B30] to-[#FF9F0A] border border-white/25 flex items-center justify-center backdrop-blur-xl shadow-[0_10px_30px_rgba(255,59,48,0.4)] relative"
+          className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-[#FF3B30] to-[#FF9F0A] border border-white/25 overflow-hidden flex items-center justify-center backdrop-blur-xl shadow-[0_10px_30px_rgba(255,59,48,0.4)] relative"
         >
-          {/* Internal Glowing Glass Dot */}
-          <div className="absolute w-6 h-6 rounded-full bg-white/40 blur-md animate-pulse" />
-          <span className="text-3xl font-black text-white tracking-widest pl-1">N</span>
+          <img 
+            src="/src/assets/images/app_logo_1784015855312.jpg" 
+            alt="Nomis Logo" 
+            className="w-full h-full object-cover select-none" 
+            referrerPolicy="no-referrer"
+          />
         </motion.div>
 
         <div className="space-y-2">
@@ -174,8 +177,9 @@ export const OnboardingView: React.FC<{
 export const LoginView: React.FC<{
   onNavigate: (screen: ScreenId) => void;
   onLoginSuccess: () => void;
+  onGoogleLoginSuccess?: () => void;
   onShowToast: (message: string, type?: 'success' | 'error' | 'info') => void;
-}> = ({ onNavigate, onLoginSuccess, onShowToast }) => {
+}> = ({ onNavigate, onLoginSuccess, onGoogleLoginSuccess, onShowToast }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -201,7 +205,11 @@ export const LoginView: React.FC<{
     try {
       await signInWithGoogle();
       onShowToast('Authenticated successfully with Google!', 'success');
-      onLoginSuccess();
+      if (onGoogleLoginSuccess) {
+        onGoogleLoginSuccess();
+      } else {
+        onLoginSuccess();
+      }
     } catch (err: any) {
       console.error(err);
       onShowToast(err.message || 'Google Authentication failed.', 'error');

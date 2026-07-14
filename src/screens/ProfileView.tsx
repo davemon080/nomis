@@ -571,7 +571,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           onNavigate('user-onboarding');
         } else {
           localStorage.setItem(`onboarded_${user.uid}`, 'true');
-          onNavigate('creator-dashboard'); // Land on dashboard after login!
+          onNavigate('profile'); // Land on profile after login!
         }
       }
     } catch (err) {

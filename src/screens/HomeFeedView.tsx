@@ -39,7 +39,7 @@ export const HomeFeedView: React.FC<HomeFeedViewProps> = ({
   // Synchronize mute state across players when tab or storage changes
   const [isMuted, setIsMuted] = useState(() => {
     const cached = localStorage.getItem('nomis_global_mute');
-    return cached !== null ? JSON.parse(cached) : true;
+    return cached !== null ? JSON.parse(cached) : false;
   });
 
   useEffect(() => {

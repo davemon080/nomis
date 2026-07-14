@@ -44,6 +44,15 @@ export const ShareSheet: React.FC<ShareSheetProps> = ({
   const [creators, setCreators] = useState<any[]>([]);
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowDeleteConfirm(false);
+      setIsDeleting(false);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -93,20 +102,28 @@ export const ShareSheet: React.FC<ShareSheetProps> = ({
 
   const isOwner = auth.currentUser && video && video.creator && video.creator.id === auth.currentUser.uid;
 
+  const confirmDeleteAction = async () => {
+    if (!video) return;
+    setIsDeleting(true);
+    try {
+      await deleteVideoFromDb(video.id);
+      onShowToast('Video deleted successfully!', 'success');
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (err) {
+      console.error("Failed to delete video:", err);
+      onShowToast('Failed to delete video.', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleAction = async (actionType: string) => {
-    onClose();
     if (actionType === 'delete') {
       if (!video) return;
-      const confirmDelete = window.confirm("Are you sure you want to delete this visual work from your profile?");
-      if (!confirmDelete) return;
-      try {
-        await deleteVideoFromDb(video.id);
-        onShowToast('Video deleted successfully!', 'success');
-      } catch (err) {
-        console.error("Failed to delete video:", err);
-        onShowToast('Failed to delete video.', 'error');
-      }
+      setShowDeleteConfirm(true);
     } else {
+      onClose();
       onShowToast(`Executing ${actionType}...`, 'info');
     }
   };
@@ -386,6 +403,56 @@ export const ShareSheet: React.FC<ShareSheetProps> = ({
               </div>
 
             </div>
+
+            {/* Custom Delete Confirmation Modal */}
+            <AnimatePresence>
+              {showDeleteConfirm && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-neutral-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 z-50 text-center"
+                >
+                  <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4 animate-pulse">
+                    <Trash2 className="w-8 h-8 text-red-500" />
+                  </div>
+                  
+                  <h3 className="text-lg font-black text-white uppercase tracking-wider mb-2">
+                    Delete Visual Work?
+                  </h3>
+                  
+                  <p className="text-sm text-white/60 max-w-xs mb-8 leading-relaxed">
+                    Are you sure you want to delete <span className="text-white font-semibold">"{videoTitle || 'this video'}"</span>? This action is permanent and cannot be undone.
+                  </p>
+                  
+                  <div className="flex flex-col gap-3 w-full max-w-xs">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={confirmDeleteAction}
+                      disabled={isDeleting}
+                      className="w-full bg-[#FE2C55] hover:bg-[#E11D48] text-white font-black uppercase text-xs tracking-widest py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-[0_4px_15px_rgba(254,44,85,0.3)] disabled:opacity-50"
+                    >
+                      {isDeleting ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        'Confirm Delete'
+                      )}
+                    </motion.button>
+                    
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={isDeleting}
+                      className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase text-xs tracking-widest py-3.5 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </>
       )}

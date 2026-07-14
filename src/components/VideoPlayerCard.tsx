@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, MessageCircle, Share2, Bookmark, Music, Play, Pause, Volume2, VolumeX, Plus, Check } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, Music, Play, Pause, Volume2, VolumeX, Plus, Check, Image as ImageIcon } from 'lucide-react';
 import { Video, ScreenId } from '../types';
 import { GlassAvatar, GlassButton } from './GlassDesignSystem';
 import { CommentsSheet } from './CommentsSheet';
@@ -38,7 +38,7 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(() => {
     const cached = localStorage.getItem('nomis_global_mute');
-    return cached !== null ? JSON.parse(cached) : true;
+    return cached !== null ? JSON.parse(cached) : false;
   });
   const [likesCount, setLikesCount] = useState(video.likes);
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -109,19 +109,22 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
   const [commentsCount, setCommentsCount] = useState(video.commentsCount);
   const [savesCount, setSavesCount] = useState(video.savesCount);
   const [isSaved, setIsSaved] = useState(video.isSaved);
-  const [isFollowing, setIsFollowing] = useState(video.creator.isFollowing);
+  const [isFollowing, setIsFollowing] = useState(video?.creator?.isFollowing || false);
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
 
   // Dynamic creator details for retroactive verification and up-to-date profile photos
-  const [creatorVerified, setCreatorVerified] = useState(video.creator.isVerified || false);
-  const [creatorAvatar, setCreatorAvatar] = useState(video.creator.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&q=80');
-  const [creatorName, setCreatorName] = useState(video.creator.name || 'Nomis User');
+  const [creatorVerified, setCreatorVerified] = useState(video?.creator?.isVerified || false);
+  const [creatorAvatar, setCreatorAvatar] = useState(video?.creator?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&q=80');
+  const [creatorName, setCreatorName] = useState(video?.creator?.name || 'Nomis User');
+
+  const creatorId = video?.creator?.id;
 
   useEffect(() => {
+    if (!creatorId) return;
     let active = true;
     const fetchCreatorDetails = async () => {
       try {
-        const userDocRef = doc(db, 'users', video.creator.id);
+        const userDocRef = doc(db, 'users', creatorId);
         const docSnap = await getDoc(userDocRef);
         if (docSnap.exists() && active) {
           const data = docSnap.data();
@@ -145,8 +148,11 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
     return () => {
       active = false;
     };
-  }, [video.creator.id]);
+  }, [creatorId]);
   
+  // Broken image fallbacks to prevent crashes on bad URLs
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+
   // Scrubber progress states
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -467,16 +473,31 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
           className="absolute inset-0 w-full h-full flex items-center justify-center bg-neutral-950 cursor-pointer"
         >
           {/* Blurred background for cinematic feel */}
-          <div 
-            className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-30 scale-110"
-            style={{ backgroundImage: `url(${resolvedVideoUrl})` }}
-          />
-          <img 
-            src={resolvedVideoUrl} 
-            className="max-h-full max-w-full object-contain relative z-10" 
-            alt={video.title} 
-            referrerPolicy="no-referrer"
-          />
+          {!brokenImages[resolvedVideoUrl] && (
+            <div 
+              className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-30 scale-110"
+              style={{ backgroundImage: `url(${resolvedVideoUrl})` }}
+            />
+          )}
+          {brokenImages[resolvedVideoUrl] ? (
+            <div className="flex flex-col items-center justify-center p-6 text-center text-white/40 gap-3 z-10">
+              <div className="p-4 bg-white/5 border border-white/10 rounded-full">
+                <ImageIcon className="w-8 h-8 text-white/30" />
+              </div>
+              <p className="text-sm font-semibold text-white/50">Image Unavailable</p>
+              <p className="text-xs text-white/30">Could not resolve media source</p>
+            </div>
+          ) : (
+            <img 
+              src={resolvedVideoUrl} 
+              className="max-h-full max-w-full object-contain relative z-10 animate-fade-in" 
+              alt={video.title} 
+              referrerPolicy="no-referrer"
+              onError={() => {
+                setBrokenImages((prev) => ({ ...prev, [resolvedVideoUrl]: true }));
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -487,10 +508,12 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
           className="absolute inset-0 w-full h-full flex items-center justify-center bg-neutral-950 cursor-pointer select-none"
         >
           {/* Blurred background of current image */}
-          <div 
-            className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-30 scale-110 transition-all duration-500"
-            style={{ backgroundImage: `url(${carouselImages[carouselIndex]})` }}
-          />
+          {!brokenImages[carouselImages[carouselIndex]] && (
+            <div 
+              className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-30 scale-110 transition-all duration-500"
+              style={{ backgroundImage: `url(${carouselImages[carouselIndex]})` }}
+            />
+          )}
 
           {/* Sliding Image View with horizontal native snap scroll */}
           <div className="relative w-full h-full z-10">
@@ -506,12 +529,25 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
             >
               {carouselImages.map((img, i) => (
                 <div key={i} className="w-full h-full flex-shrink-0 snap-start flex items-center justify-center bg-black">
-                  <img
-                    src={img}
-                    className="max-h-full max-w-full object-contain"
-                    alt={`${video.title} - Slide ${i + 1}`}
-                    referrerPolicy="no-referrer"
-                  />
+                  {brokenImages[img] ? (
+                    <div className="flex flex-col items-center justify-center p-6 text-center text-white/40 gap-3">
+                      <div className="p-4 bg-white/5 border border-white/10 rounded-full">
+                        <ImageIcon className="w-8 h-8 text-white/30" />
+                      </div>
+                      <p className="text-sm font-semibold text-white/50">Image Unavailable</p>
+                      <p className="text-xs text-white/30">Slide {i + 1} failed to load</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={img}
+                      className="max-h-full max-w-full object-contain animate-fade-in"
+                      alt={`${video.title} - Slide ${i + 1}`}
+                      referrerPolicy="no-referrer"
+                      onError={() => {
+                        setBrokenImages((prev) => ({ ...prev, [img]: true }));
+                      }}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -696,13 +732,42 @@ export const VideoPlayerCard: React.FC<VideoPlayerCardProps> = ({
           <span className="text-[9px] font-bold text-white/90 tracking-wide drop-shadow-md">{video.sharesCount}</span>
         </div>
 
+        {/* Mute/Unmute action */}
+        <div className="flex flex-col items-center gap-1">
+          <motion.button
+            whileHover={{ scale: 1.12 }}
+            whileTap={{ scale: 0.85 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMute();
+            }}
+            className={`p-2.5 rounded-full backdrop-blur-xl border border-white/10 shadow-lg transition-all duration-300 cursor-pointer
+              ${isMuted ? 'bg-black/40 text-white/60' : 'bg-[#FE2C55]/20 text-white border-[#FE2C55]/30'}
+            `}
+            title={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? <VolumeX className="w-4.5 h-4.5" /> : <Volume2 className="w-4.5 h-4.5" />}
+          </motion.button>
+          <span className="text-[9px] font-bold text-white/90 tracking-wide drop-shadow-md">
+            {isMuted ? 'Muted' : 'Sound'}
+          </span>
+        </div>
+
         {/* Spinning Record Icon (Music placeholder) */}
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
           className="w-8 h-8 rounded-full border border-white/20 bg-gradient-to-tr from-black via-zinc-800 to-black flex items-center justify-center shadow-2xl mt-1 overflow-hidden"
         >
-          <img src={creatorAvatar} className="w-5 h-5 rounded-full object-cover animate-pulse" alt="" />
+          <img 
+            src={creatorAvatar} 
+            className="w-5 h-5 rounded-full object-cover animate-pulse" 
+            alt="" 
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&q=80';
+            }}
+          />
         </motion.div>
       </div>
 

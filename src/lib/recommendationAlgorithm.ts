@@ -120,6 +120,8 @@ export const getUserActivities = async (userId: string): Promise<UserActivity[]>
 /**
  * 3. Core Recommendation Algorithm
  * Matches videos with user's behavioral patterns, tags preferences, and discovery factors.
+ * Integrates an organic engagement velocity algorithm that detects accelerating likes/reactions,
+ * pushes viral videos heavily, and decays the push as engagement begins to drop.
  */
 export const personalizeFeed = async (
   allVideos: Video[],
@@ -130,15 +132,39 @@ export const personalizeFeed = async (
   // Deduplicate input videos list just in case
   const videos = Array.from(new Map(allVideos.map(v => [v.id, v])).values());
 
+  // 1. Fetch user specific activities for personalized tastes
   const activities = await getUserActivities(userId);
 
-  // If no activity yet, serve videos sorted by global engagement with dynamic discovery noise
-  if (activities.length === 0) {
-    return [...videos].sort((a, b) => {
-      const scoreA = (a.likes || 0) * 2 + (a.views || 0) + Math.random() * 50;
-      const scoreB = (b.likes || 0) * 2 + (b.views || 0) + Math.random() * 50;
-      return scoreB - scoreA;
+  // 2. Fetch global activities across all users to calculate viral engagement velocity
+  let globalActivities: UserActivity[] = [];
+  try {
+    const q = query(
+      collection(db, 'user_activities'),
+      orderBy('createdAt', 'desc'),
+      limit(250)
+    );
+    const snap = await getDocs(q);
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      globalActivities.push({
+        id: docSnap.id,
+        userId: data.userId,
+        videoId: data.videoId,
+        activityType: data.activityType,
+        tags: data.tags || [],
+        creatorId: data.creatorId,
+        watchDuration: data.watchDuration,
+        timestamp: data.timestamp || data.createdAt
+      });
     });
+  } catch (err) {
+    console.warn("Could not fetch global activities for viral loop, falling back to local simulation:", err);
+  }
+
+  // Fallback to local activities if global is empty
+  if (globalActivities.length === 0) {
+    const localKey = `nomis_activities_${userId}`;
+    globalActivities = JSON.parse(localStorage.getItem(localKey) || '[]');
   }
 
   // --- BUILD THE USER PROFILE VECTORS ---
@@ -192,6 +218,66 @@ export const personalizeFeed = async (
     }
   });
 
+  // --- CALCULATE VIRAL ENGAGEMENT VELOCITY FOR EACH VIDEO ---
+  // We classify activity timestamp buckets to calculate velocity (acceleration/deceleration)
+  const now = Date.now();
+  const fourHoursMs = 4 * 60 * 60 * 1000;
+  const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+
+  const viralBoosts: Record<string, number> = {};
+
+  videos.forEach((video) => {
+    // Filter activities belonging to this video
+    const videoActs = globalActivities.filter(act => act.videoId === video.id);
+    
+    // Count positive engagements (likes, comments, shares, saves, long watches)
+    const hotActs = videoActs.filter(act => act.activityType !== 'watch' || (act.watchDuration && act.watchDuration > 5));
+
+    let veryRecentCount = 0; // Last 4 hours
+    let olderRecentCount = 0; // 4 to 24 hours ago
+
+    hotActs.forEach(act => {
+      const actTime = new Date(act.timestamp).getTime();
+      const age = now - actTime;
+      if (age <= fourHoursMs) {
+        veryRecentCount++;
+      } else if (age <= twentyFourHoursMs) {
+        olderRecentCount++;
+      }
+    });
+
+    let velocityBoost = 0;
+
+    if (veryRecentCount > 0) {
+      if (veryRecentCount > olderRecentCount) {
+        // CASE A: Acceleration! More users are engaging now than in the previous window.
+        // Keep pushing it heavily!
+        const accelerationFactor = veryRecentCount - olderRecentCount;
+        velocityBoost = 150 + (accelerationFactor * 50); 
+      } else {
+        // CASE B: Slowing down! Engagement is still happening but velocity is dropping.
+        // Decelerate the push!
+        const decelerationRatio = veryRecentCount / (olderRecentCount || 1);
+        velocityBoost = Math.max(50, 150 * decelerationRatio);
+      }
+    } else {
+      // CASE C: Dropped! No recent activities in the last 4 hours.
+      // Engagement has dropped completely, decay the boost to 0 or penalize stale content.
+      velocityBoost = 0;
+    }
+
+    // Include the base likes and views to seed viral acceleration if no db logs exist yet
+    if (videoActs.length === 0) {
+      // Simulated baseline push for high-like videos (proportional to like-to-view ratio)
+      const likeRatio = (video.likes || 0) / ((video.views || 1) + 1);
+      if (likeRatio > 0.15 && (video.likes || 0) > 5) {
+        velocityBoost = Math.min(120, likeRatio * 300);
+      }
+    }
+
+    viralBoosts[video.id] = velocityBoost;
+  });
+
   // --- SCORE ALL VIDEOS ---
   const scoredVideos = videos.map((video) => {
     let score = 0;
@@ -211,12 +297,16 @@ export const personalizeFeed = async (
       score += creatorScores[video.creator.id];
     }
 
-    // 3. Global Popularity (Views/Likes base weight)
+    // 3. Dynamic Engagement Velocity Loop (Viral Push / Decelerated Drop)
+    const viralPush = viralBoosts[video.id] || 0;
+    score += viralPush;
+
+    // 4. Global Popularity (Views/Likes base weight)
     const totalEngagements = (video.likes || 0) * 3 + (video.savesCount || 0) * 4 + (video.sharesCount || 0) * 2;
     const popularityScore = Math.min(totalEngagements / ( (video.views || 1) + 1 ) * 50, 100);
     score += popularityScore;
 
-    // 4. Recency Boost (Fresh new content gets prioritized)
+    // 5. Recency Boost (Fresh new content gets prioritized)
     if (video.createdAt) {
       const ageInMs = Date.now() - new Date(video.createdAt).getTime();
       const ageInHours = ageInMs / (1000 * 60 * 60);
@@ -224,20 +314,21 @@ export const personalizeFeed = async (
       score += recencyBoost;
     }
 
-    // 5. Deduplication/Freshness Penalty
+    // 6. Deduplication/Freshness Penalty
     // If they have already watched this exact video, deprioritize it slightly to avoid stale loops
     if (watchedVideoIds.has(video.id)) {
       score -= 80;
     }
 
-    // 6. Controlled Serendipity & Exploration Noise (TikTok style discovery mechanism)
+    // 7. Controlled Serendipity & Exploration Noise (TikTok style discovery mechanism)
     // This allows the algorithm to learn new tastes as users interact with random suggested tags
     const serendipityNoise = Math.random() * 45; 
     score += serendipityNoise;
 
     return {
       video,
-      score
+      score,
+      viralPush
     };
   });
 
